@@ -4,7 +4,22 @@
     "id": "2f53c4f4-c183-4ca3-b5ed-b6535816c32c",
     "description": "Real Estate Customer Support",
     "capabilities": [],
-    "knowledge_sources": [],
+    "knowledge_sources": [
+        {
+            "id": "1789728191201",
+            "type": "url",
+            "name": "https://example.com/",
+            "value": "https://example.com/",
+            "status": "ready"
+        },
+        {
+            "id": "1789730726205",
+            "type": "document",
+            "name": "k.txt",
+            "value": "Renting Premium Plan Includes:\r\nUnlimited Food\r\nUnlimited Parking Space\r\nPremium furniture\r\n",
+            "status": "ready"
+        }
+    ],
     "channels": [],
     "configuration": {
         "name": "Jack",
@@ -30,7 +45,22 @@
         "speakingSpeed": 1,
         "pitch": 0,
         "voiceStyle": "conversational",
-        "knowledgeSources": [],
+        "knowledgeSources": [
+            {
+                "id": "1789728191201",
+                "type": "url",
+                "name": "https://example.com/",
+                "value": "https://example.com/",
+                "status": "ready"
+            },
+            {
+                "id": "1789730726205",
+                "type": "document",
+                "name": "k.txt",
+                "value": "Renting Premium Plan Includes:\r\nUnlimited Food\r\nUnlimited Parking Space\r\nPremium furniture\r\n",
+                "status": "ready"
+            }
+        ],
         "greeting": "Hi there! How can I help you today?",
         "fallbackMessage": "I'm sorry, I didn't catch that. Could you say that again?",
         "fallbackBehavior": "ask-again",
@@ -40,9 +70,9 @@
         "maxConversationMin": 20,
         "endMessage": "Thanks for reaching out! Have a great day.",
         "enabledTools": [],
-        "memoryType": "long-term",
-        "persistentMemory": true,
-        "userMemory": true,
+        "memoryType": "short-term",
+        "persistentMemory": false,
+        "userMemory": false,
         "retentionDays": 7,
         "allowedTopics": [
             "Property listings and basic details such as price, bedrooms, bathrooms, square footage, and general location Scheduling, rescheduling, or canceling a showing Rental or purchase application status and required documents Basic account questions such as updating contact info or checking a submitted request Maintenance or repair requests for a current tenant General office hours, contact methods, and how to reach a specific agent or department"
@@ -59,5 +89,5 @@
     "status": "PUBLISHED",
     "version": "1.0",
     "created_at": "2026-09-18T05:52:11.938177",
-    "updated_at": "2026-09-18T06:26:52.182388"
+    "updated_at": "2026-09-18T11:25:35.561236"
 }

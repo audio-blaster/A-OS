@@ -15,6 +15,7 @@ from app.audio.engine import AudioEngine
 from app.llm.service import LLMService
 from app.tts.service import TTSService
 from app.memory.service import MemoryService
+from app.knowledge.service import knowledge_service
 from app.security import RateLimiter, RateLimitExceeded, SpamDetected, TemporarilyBlocked
 
 app = FastAPI(title="AgentOS")
@@ -272,6 +273,7 @@ async def create_agent(payload: AgentCreateRequest):
         configuration=configuration,
     )
     agent_registry.save(agent)
+    knowledge_service.reindex_agent(agent.id, agent.knowledge_sources)
 
     return agent_response(agent)
 
@@ -344,6 +346,7 @@ async def update_agent(agent_id: str, payload: AgentUpdateRequest):
     agent.status = normalized_status(updates.get("status", agent.status))
     agent.updated_at = datetime.utcnow().isoformat()
     agent_registry.save(agent)
+    knowledge_service.reindex_agent(agent.id, agent.knowledge_sources)
 
     return agent_response(agent)
 
@@ -435,8 +438,11 @@ async def chat(payload: ChatRequest):
         f"llm_model={configuration.get('llmModel', 'sonar')}"
     )
 
+    kb_context = knowledge_service.render_context_for_query(agent.id, payload.message, limit=3)
+    context = kb_context
+
     response_parts = []
-    async for token in selected_llm.stream(payload.message, ""):
+    async for token in selected_llm.stream(payload.message, context):
         response_parts.append(token)
 
     response = "".join(response_parts).strip()
