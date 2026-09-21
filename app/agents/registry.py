@@ -89,7 +89,7 @@ class AgentRegistry:
             encoding="utf-8"
         )
 
-    def get(self, agent_id: str):
+    def get(self, agent_id: str, owner_id: str | None = None):
 
         file_path = (
             self.storage_path /
@@ -107,7 +107,13 @@ class AgentRegistry:
 
             data = json.load(file)
 
-        return Agent(**data)
+        agent = Agent(**data)
+
+        if owner_id is not None:
+            if agent.owner_id is None or agent.owner_id != owner_id:
+                return None
+
+        return agent
 
     def load_definition(self, agent_id: str):
 
@@ -123,7 +129,7 @@ class AgentRegistry:
             encoding="utf-8"
         )
 
-    def list_agents(self):
+    def list_agents(self, owner_id: str | None = None):
 
         agents = []
 
@@ -136,14 +142,17 @@ class AgentRegistry:
             ) as f:
 
                 data = json.load(f)
+                agent = Agent(**data)
 
-                agents.append(
-                    Agent(**data)
-                )
+                if owner_id is not None:
+                    if agent.owner_id is None or agent.owner_id != owner_id:
+                        continue
+
+                agents.append(agent)
 
         return agents
 
-    def delete(self, agent_id: str):
+    def delete(self, agent_id: str, owner_id: str | None = None):
 
         file_path = (
             self.storage_path /
@@ -152,6 +161,11 @@ class AgentRegistry:
 
         if not file_path.exists():
             return False
+
+        if owner_id is not None:
+            agent = self.get(agent_id)
+            if agent is None or agent.owner_id != owner_id:
+                return False
 
         file_path.unlink()
 

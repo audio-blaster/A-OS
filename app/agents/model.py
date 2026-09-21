@@ -35,6 +35,8 @@ class Agent:
 
     version: str = "1.0"
 
+    owner_id: str | None = None
+
     created_at: str = field(
         default_factory=lambda: datetime.utcnow().isoformat()
     )

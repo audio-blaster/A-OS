@@ -77,11 +77,18 @@ def agent_response(agent: Agent):
         "channels": agent.channels,
         "status": agent.status,
         "version": agent.version,
+        "owner_id": agent.owner_id,
         "created_at": agent.created_at,
         "updated_at": agent.updated_at,
     }
 
     return data
+
+
+def require_current_user_id(user_id: str | None):
+    if not user_id or not user_id.strip():
+        raise HTTPException(status_code=401, detail="Authenticated user is required")
+    return user_id.strip()
 
 
 def request_configuration(payload: BaseModel):
@@ -253,7 +260,8 @@ async def providers():
 
 
 @app.post("/agents", status_code=201)
-async def create_agent(payload: AgentCreateRequest):
+async def create_agent(payload: AgentCreateRequest, user_id: str | None = None):
+    current_user_id = require_current_user_id(user_id)
     configuration = request_configuration(payload)
     name = payload.name.strip()
 
@@ -270,6 +278,7 @@ async def create_agent(payload: AgentCreateRequest):
         knowledge_sources=configuration.get("knowledgeSources", []),
         channels=configuration.get("channels", []),
         status=status,
+        owner_id=current_user_id,
         configuration=configuration,
     )
     agent_registry.save(agent)
@@ -284,8 +293,10 @@ async def list_agents(
     page_size: int = Query(default=20, ge=1, le=100),
     search: str = Query(default=""),
     status: str | None = None,
+    user_id: str | None = None,
 ):
-    agents = agent_registry.list_agents()
+    current_user_id = require_current_user_id(user_id)
+    agents = agent_registry.list_agents(owner_id=current_user_id)
     search_term = search.strip().lower()
     status_term = normalized_status(status) if status else None
 
@@ -314,8 +325,9 @@ async def list_agents(
 
 
 @app.get("/agents/{agent_id}")
-async def get_agent(agent_id: str):
-    agent = agent_registry.get(agent_id)
+async def get_agent(agent_id: str, user_id: str | None = None):
+    current_user_id = require_current_user_id(user_id)
+    agent = agent_registry.get(agent_id, owner_id=current_user_id)
 
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -324,8 +336,9 @@ async def get_agent(agent_id: str):
 
 
 @app.patch("/agents/{agent_id}")
-async def update_agent(agent_id: str, payload: AgentUpdateRequest):
-    agent = agent_registry.get(agent_id)
+async def update_agent(agent_id: str, payload: AgentUpdateRequest, user_id: str | None = None):
+    current_user_id = require_current_user_id(user_id)
+    agent = agent_registry.get(agent_id, owner_id=current_user_id)
 
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -352,8 +365,9 @@ async def update_agent(agent_id: str, payload: AgentUpdateRequest):
 
 
 @app.delete("/agents/{agent_id}")
-async def delete_agent(agent_id: str):
-    if not agent_registry.delete(agent_id):
+async def delete_agent(agent_id: str, user_id: str | None = None):
+    current_user_id = require_current_user_id(user_id)
+    if not agent_registry.delete(agent_id, owner_id=current_user_id):
         raise HTTPException(status_code=404, detail="Agent not found")
 
     return {"status": "deleted", "id": agent_id}
