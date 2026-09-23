@@ -3,11 +3,14 @@ from pathlib import Path
 from dataclasses import asdict
 
 from app.agents.model import Agent
+from app.agents.repository import AgentRepository
 
 
 class AgentRegistry:
 
-    def __init__(self):
+    def __init__(self, repository: AgentRepository | None = None):
+
+        self.repository = repository
 
         self.storage_path = Path(
             "data/agents"
@@ -19,6 +22,11 @@ class AgentRegistry:
         )
 
     def save(self, agent: Agent):
+
+        if self.repository is not None:
+            self.repository.save(agent)
+            self._write_definition(agent)
+            return
 
         file_path = (
             self.storage_path /
@@ -36,6 +44,17 @@ class AgentRegistry:
                 file,
                 indent=4
             )
+
+        self._write_definition(agent)
+
+    def _write_definition(self, agent: Agent):
+        definition_path = self.storage_path / f"{agent.id}.AGENT.md"
+        definition_path.write_text(
+            self.render_definition(agent),
+            encoding="utf-8",
+        )
+
+    def render_definition(self, agent: Agent):
 
         configuration = agent.configuration
         definition = [
@@ -79,17 +98,12 @@ class AgentRegistry:
             if handoff_conditions:
                 definition.append(f"Human handoff conditions: {handoff_conditions}")
 
-        definition_path = (
-            self.storage_path /
-            f"{agent.id}.AGENT.md"
-        )
-
-        definition_path.write_text(
-            "\n".join(definition) + "\n",
-            encoding="utf-8"
-        )
+        return "\n".join(definition) + "\n"
 
     def get(self, agent_id: str, owner_id: str | None = None):
+
+        if self.repository is not None:
+            return self.repository.get(agent_id, owner_id=owner_id)
 
         file_path = (
             self.storage_path /
@@ -131,6 +145,9 @@ class AgentRegistry:
 
     def list_agents(self, owner_id: str | None = None):
 
+        if self.repository is not None:
+            return self.repository.list_agents(owner_id=owner_id)
+
         agents = []
 
         for file in self.storage_path.glob("*.json"):
@@ -153,6 +170,9 @@ class AgentRegistry:
         return agents
 
     def delete(self, agent_id: str, owner_id: str | None = None):
+
+        if self.repository is not None:
+            return self.repository.delete(agent_id, owner_id=owner_id)
 
         file_path = (
             self.storage_path /

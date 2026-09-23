@@ -10,6 +10,7 @@ from app.websocket_manager import manager
 from app.agent_runtime import AgentOSRuntime
 from app.agents.model import Agent
 from app.agents.registry import AgentRegistry
+from app.agents.supabase_repository import create_supabase_agent_repository
 from app.conversation.state import AssistantState
 from app.audio.engine import AudioEngine
 from app.llm.service import LLMService
@@ -19,8 +20,15 @@ from app.knowledge.service import knowledge_service
 from app.security import RateLimiter, RateLimitExceeded, SpamDetected, TemporarilyBlocked
 
 app = FastAPI(title="AgentOS")
-agent_registry = AgentRegistry()
+agent_registry = AgentRegistry(repository=create_supabase_agent_repository())
 VALID_AGENT_STATUSES = {"DRAFT", "TESTING", "PUBLISHED"}
+
+
+@app.on_event("startup")
+def validate_agent_schema():
+    repository = agent_registry.repository
+    if repository is not None:
+        repository.validate_schema()
 
 
 class AgentCreateRequest(BaseModel):
@@ -103,7 +111,7 @@ def normalized_status(value):
 
 
 def runtime_configuration(agent: Agent):
-    agent_definition = agent_registry.load_definition(agent.id)
+    agent_definition = agent_registry.render_definition(agent)
     system_instructions = agent.configuration.get("systemInstructions", "")
     conversation_behavior = (
         "Stay engaged with the current exchange and trust its context. Answer the "
