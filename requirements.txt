@@ -56,4 +56,4 @@ urllib3==2.7.0
 uvicorn==0.51.0
 webrtcvad==2.0.10
 webrtcvad-wheels==2.0.14
-websockets==16.0
+websockets==15.0.1
