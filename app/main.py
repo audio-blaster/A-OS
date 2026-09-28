@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
@@ -160,7 +161,7 @@ def configured_llm(agent: Agent, configuration=None):
 # Services
 # -----------------------------
 factory = ProviderFactory(registry)
-audio_engine = AudioEngine()
+audio_engine = AudioEngine(enable_local_audio=False)
 stt = factory.create_stt("sarvam")
 llm = factory.create_llm("perplexity")
 tts = factory.create_tts("sarvam")
@@ -180,7 +181,9 @@ rate_limiter = RateLimiter(
 # -----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+    os.getenv("CORS_ORIGIN", "http://localhost:5173")
+],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -604,11 +607,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            message = json.loads(await websocket.receive_text())
+            message = await websocket.receive()
 
-            if message.get("event") == "playback_complete":
-                generation = message.get("data", {}).get("generation")
-                await runtime.handle_playback_complete(generation)
+            if message.get("text") is not None:
+                payload = json.loads(message["text"])
+                if payload.get("event") == "playback_complete":
+                    generation = payload.get("data", {}).get("generation")
+                    await runtime.handle_playback_complete(generation)
+                continue
+
+            if message.get("bytes") is not None:
+                pcm = message["bytes"]
+                if pcm:
+                    await runtime.stt.feed_audio(pcm)
+                continue
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

@@ -10,3 +10,5 @@ __pycache__
 *.log
 Dockerfile
 docker-compose.yml
+data
+app/memory/storage

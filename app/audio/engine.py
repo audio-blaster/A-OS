@@ -17,15 +17,17 @@ from app.conversation.utterance_detector import UtteranceDetector
 
 class AudioEngine:
 
-    def __init__(self):
+    def __init__(self, enable_local_audio: bool = False):
 
+        self.enable_local_audio = enable_local_audio
         self.processor = AudioProcessorService()
-        self.microphone = Microphone()
-        self.speaker = Speaker()
+        self.microphone = Microphone() if enable_local_audio else None
+        self.speaker = Speaker() if enable_local_audio else None
         self.vad = VADService()
         self.debugger = AudioDebugger()
 
-        self.microphone.start()
+        if self.microphone is not None:
+            self.microphone.start()
 
         self.frame_buffer = FrameBuffer()
         self.utterance_detector = UtteranceDetector()
@@ -102,7 +104,7 @@ class AudioEngine:
 
                     continue
 
-                if self.speaker.stopped:
+                if self.speaker is None or self.speaker.stopped:
 
                     continue
 
@@ -129,13 +131,12 @@ class AudioEngine:
     # -----------------------------------------
 
     def begin_playback(self):
+        speaker_state = "disabled" if self.speaker is None else self.speaker.stopped
         print(
-    f"[AUDIO] begin_playback ENTER "
-    f"stop_requested={self.stop_requested} "
-    f"speaker.stopped={self.speaker.stopped}"
-)
-
-
+            f"[AUDIO] begin_playback ENTER "
+            f"stop_requested={self.stop_requested} "
+            f"speaker.stopped={speaker_state}"
+        )
 
         self.playback_generation += 1
 
@@ -144,7 +145,8 @@ class AudioEngine:
 
         self.playback_buffer.clear()
 
-        self.speaker.resume()
+        if self.speaker is not None:
+            self.speaker.resume()
 
         return self.playback_generation
 
@@ -163,11 +165,12 @@ class AudioEngine:
             self.turn_timing.playback_first_frame is None):
             self.turn_timing.playback_first_frame = time.perf_counter()
 
+        speaker_state = "disabled" if self.speaker is None else self.speaker.stopped
         print(f"[AUDIO] play_frame ENTER bytes={len(chunk)}")
         print(
             f"[AUDIO] play_frame STATE "
             f"stop_requested={self.stop_requested} "
-            f"speaker.stopped={self.speaker.stopped} "
+            f"speaker.stopped={speaker_state} "
             f"browser_callback={'present' if self.browser_audio_callback else 'none'}"
         )
 
@@ -187,7 +190,7 @@ class AudioEngine:
 
             return
 
-        if self.speaker.stopped:
+        if self.speaker is not None and self.speaker.stopped:
 
             print("[AUDIO] play_frame RETURN reason=speaker_stopped")
 
@@ -241,6 +244,10 @@ class AudioEngine:
         self.is_playing = True
 
     async def start_capture(self, callback):
+        if self.microphone is None:
+            print("🎤 Local microphone capture disabled")
+            return
+
         if self.capture_task is not None:
             return
 
@@ -248,8 +255,8 @@ class AudioEngine:
         self.capture_running = True
 
         self.capture_task = asyncio.create_task(
-        self._capture_loop()
-    )
+            self._capture_loop()
+        )
 
         print("🎤 Continuous microphone capture started")
 
@@ -258,25 +265,22 @@ class AudioEngine:
         try:
             while self.capture_running:
                 raw_frame = await asyncio.to_thread(
-                self.microphone.read
-            )
+                    self.microphone.read
+                )
 
                 if not raw_frame:
                     continue
 
-            # IMPORTANT:
-            # Always process microphone audio through AEC.
-                
+                # IMPORTANT:
+                # Always process microphone audio through AEC.
                 clean_frame = (
                     self.processor.process_microphone(raw_frame)
                 )
-                
-            
 
                 if self.capture_callback:
                     result = self.capture_callback(
-                    clean_frame
-                )
+                        clean_frame
+                    )
 
                     if asyncio.iscoroutine(result):
                         await result
@@ -321,7 +325,7 @@ class AudioEngine:
         self.is_playing = False
         self.stop_requested = True
 
-    # Discard audio that has not reached the speaker.
+        # Discard audio that has not reached the speaker.
         self.playback_buffer.clear()
 
         while True:
@@ -335,11 +339,12 @@ class AudioEngine:
             except asyncio.QueueEmpty:
                 break
 
-        self.speaker.stop()
+        if self.speaker is not None:
+            self.speaker.stop()
 
         print(
-        "🔇 Local playback cleared"
-    )
+            "🔇 Local playback cleared"
+        )
 
 
 
@@ -360,13 +365,17 @@ class AudioEngine:
 
             self.playback_task = None
 
-        self.microphone.cleanup()
-        self.speaker.cleanup()
+        if self.microphone is not None:
+            self.microphone.cleanup()
+        if self.speaker is not None:
+            self.speaker.cleanup()
 
     def cleanup(self):
 
         self.stop()
 
-        self.microphone.cleanup()
-        self.speaker.cleanup()
+        if self.microphone is not None:
+            self.microphone.cleanup()
+        if self.speaker is not None:
+            self.speaker.cleanup()
 
