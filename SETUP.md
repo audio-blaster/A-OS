@@ -5,6 +5,8 @@ This project is split across two directories in the current workspace:
 - `A-OS/` — the Python FastAPI backend, agent runtime, Supabase integration, and voice/AI orchestration
 - `my-auth-app/` — the React + Vite frontend used for authentication and agent management
 
+These are separate repositories. There is no root-level Compose file joining them; run each repository's Compose commands from that repository directory. Frontend Docker commands are documented in `my-auth-app/README.md`.
+
 This guide is written for a developer who is new to the project and needs the shortest path to a working local setup.
 
 > Important: this repository does not include a checked-in `.env.example` or a single install script. The setup is based on the code and configuration currently in the repo. Where the code does not clearly define a requirement, this guide marks it as `Needs verification` instead of guessing.
@@ -631,7 +633,7 @@ The repo does not contain seed SQL for production or demo data. There is no defa
 
 ## 11. Environment variables
 
-The code reads environment variables using `os.getenv(...)`, browser `import.meta.env`, and `python-dotenv` in some backend modules. The repo does not include a `.env.example`, so the exact file layout is not standardized across the project.
+The code reads environment variables using `os.getenv(...)`, browser `import.meta.env`, and `python-dotenv` in some backend modules. The repositories do not include a `.env.example`. The Docker configurations use `.env` differently depending on environment; see [Docker workflows](#docker-workflows).
 
 ### Frontend variables
 
@@ -703,20 +705,96 @@ SUPABASE_ANON_KEY=<your-public-anon-key>
 
 ### Special environment note
 
-The frontend and backend may point to the same Supabase project but require different env files and different keys.
-
-- Frontend env file: browser-safe public values
-- Backend env file: secret or server-side values
+The frontend and backend may point to the same Supabase project, but the frontend uses browser-facing build/runtime configuration while the backend uses server-side configuration. Do not put backend secrets in frontend configuration.
 
 Never put backend secret keys into frontend code or frontend `.env` files.
 
 ### What breaks if env variables are missing
 
-- Missing `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` → backend startup fails when creating the Supabase repository
+- Missing `SUPABASE_URL` or both supported backend keys (`SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_ANON_KEY`) → backend startup fails when creating the Supabase repository
 - Missing `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` → frontend auth fails to initialize
 - Missing `PERPLEXITY_API_KEY` → the default LLM path cannot operate
 - Missing `SARVAM_API_KEY` → STT/TTS voice features fail
 - Missing provider API keys → provider constructors raise runtime errors
+
+## Docker workflows
+
+The commands below apply to the backend repository directory (`A-OS`). Frontend commands are in `my-auth-app/README.md`. Build, start, and stop the two repositories separately.
+
+### Backend LOCAL
+
+`docker-compose.yaml` builds the existing `Dockerfile`, publishes `8000:8000`, bind-mounts the source at `/app`, reads `.env` with service-level `env_file`, and starts Uvicorn with `--reload`.
+
+```sh
+docker compose build
+docker compose up
+docker compose down
+```
+
+### Backend DEV
+
+`docker-compose.dev.yaml` builds an image with no source bind mount or reload. It reads `.env` with service-level `env_file` and declares named volumes for backend data and memory.
+
+```sh
+docker compose -f docker-compose.dev.yaml build
+docker compose -f docker-compose.dev.yaml up
+docker compose -f docker-compose.dev.yaml down
+```
+
+### Backend PROD
+
+`docker-compose.prod.yaml` builds the existing `Dockerfile`, has no source bind mount or reload, and runs one Uvicorn worker. It does not use a service-level `env_file`; values are supplied for Compose interpolation.
+
+```sh
+docker compose --env-file .env -f docker-compose.prod.yaml build
+docker compose --env-file .env -f docker-compose.prod.yaml up
+docker compose --env-file .env -f docker-compose.prod.yaml down
+```
+
+For PROD, the referenced `.env` is the backend repository's Compose interpolation file. The checked-in DEV backend Compose file does not require Compose interpolation; it injects `.env` into the service through `env_file: .env`.
+
+### Environment-variable mechanisms
+
+These mechanisms are distinct:
+
+- **Compose interpolation:** `docker compose --env-file .env ...` supplies values for `${VARIABLE}` expressions in a Compose file. Shell environment variables can also supply values and take precedence over the supplied env file.
+- **Service-level `env_file`:** `env_file: .env` passes entries from that file into the running backend container. Backend LOCAL and DEV use this mechanism.
+- **Vite build arguments:** Frontend DEV and PROD pass `VITE_*` values through Docker build arguments. Vite embeds these values into the generated assets at build time; they are not runtime Nginx container configuration. Frontend LOCAL runs Vite with the source tree mounted, so Vite reads its project environment directly.
+
+### Variables used by Docker and the application
+
+| Variable | Where used | Compose requirement / application behavior |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | Frontend | Required build argument in DEV and PROD; frontend Supabase URL. |
+| `VITE_SUPABASE_ANON_KEY` | Frontend | Required build argument in DEV and PROD; public browser key. |
+| `VITE_API_BASE_URL` | Frontend | Required build argument in DEV and PROD; HTTP API base from which the browser derives the WebSocket URL. |
+| `CORS_ORIGIN` | Backend | Required interpolation in PROD; application otherwise defaults to `http://localhost:5173`. |
+| `SUPABASE_URL` | Backend | Required interpolation in PROD; required by backend repository creation. |
+| `SUPABASE_ANON_KEY` | Backend | Optional interpolation in PROD; application fallback when no service-role key is set. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Backend application | Supported and preferred by application code over the anon key. The current PROD Compose file does not map it into the container. LOCAL/DEV service `env_file` passes entries present in their referenced file. |
+| `SARVAM_API_KEY` | Backend | Required interpolation in PROD; used by the Sarvam STT/TTS services. |
+| `PERPLEXITY_API_KEY` | Backend | Required interpolation in PROD; used by the default Perplexity LLM. |
+| `DEEPSEEK_API_KEY` | Backend | Optional interpolation in PROD; needed if a configured agent selects DeepSeek. |
+| `GEMINI_API_KEY` | Backend | Optional interpolation in PROD; needed if a configured agent selects Gemini. |
+| `PIPER_MODEL_PATH`, `PIPER_EXECUTABLE` | Backend application | Optional Piper TTS settings. They are not mapped by PROD Compose; LOCAL/DEV `env_file` can pass them if present in `.env`. |
+
+The frontend and backend port mappings and persistent mounts are:
+
+| Environment | Frontend port / mounts | Backend port / mounts |
+| --- | --- | --- |
+| LOCAL | `5173`; source bind mount and `frontend_node_modules:/app/node_modules` | `8000`; source bind mount |
+| DEV | `5173`; no volumes | `8000`; `aos_dev_data:/app/data`, `aos_dev_memory:/app/app/memory/storage` |
+| PROD | `80`; no volumes | `8000`; `aos_prod_data:/app/data`, `aos_prod_memory:/app/app/memory/storage` |
+
+When Compose runs on the developer's machine, the host-local URLs are:
+
+| Environment | Frontend | Backend |
+| --- | --- | --- |
+| LOCAL | [http://localhost:5173](http://localhost:5173/) | [http://localhost:8000](http://localhost:8000/) |
+| DEV | [http://localhost:5173](http://localhost:5173/) | [http://localhost:8000](http://localhost:8000/) |
+| PROD | [http://localhost](http://localhost/) | [http://localhost:8000](http://localhost:8000/) |
+
+Remote DEV and PROD hostnames are not defined by these repositories.
 
 ---
 

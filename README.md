@@ -185,28 +185,36 @@ Important folders:
 
 ## Quick Start
 
-The repository currently requires a backend and frontend to be started separately.
+The frontend (`my-auth-app`) and backend (`A-OS`) are separate repositories and are started separately. There is no root-level Compose file joining them. For Docker, each repository provides LOCAL, DEV, and PROD Compose configurations; run commands from that repository's directory.
 
-### Backend
+### Backend LOCAL
 
-From the repository root:
+The existing manual LOCAL workflow remains available:
 
 ```bash
-cd A-OS
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Frontend
+The backend Docker workflows use:
 
-From the repository root:
+- LOCAL: `docker-compose.yaml` (bind mount and Uvicorn reload)
+- DEV: `docker-compose.dev.yaml` (immutable image, no reload)
+- PROD: `docker-compose.prod.yaml` (immutable image, one Uvicorn worker)
+
+For backend Docker commands, environment configuration, ports, and persistent volumes, see [SETUP.md](SETUP.md).
+
+The frontend also has separate LOCAL, DEV, and PROD Compose files and commands in the `my-auth-app` repository's `README.md`.
+
+### Frontend LOCAL
+
+The existing manual LOCAL workflow remains available from the frontend repository:
 
 ```bash
-cd my-auth-app
 npm install
 npm run dev
 ```
 
-> The repo does not include a single checked-in orchestration script for the full stack. The backend and frontend are intended to be started separately.
+The Docker LOCAL, DEV, and PROD workflows are documented in the frontend repository. No checked-in root-level orchestration joins the frontend and backend.
 
 For the complete installation instructions, environment setup, and troubleshooting, see [SETUP.md](SETUP.md).
 
